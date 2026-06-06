@@ -1,21 +1,11 @@
-/* linker.ld – bare-metal 32-bit ELF, loaded at 1 MB by GRUB */
 OUTPUT_FORMAT(elf32-i386)
 ENTRY(_start)
-
 SECTIONS {
-	    . = 0x100000;
-
-    .text : {
-	        *(.multiboot)
-        *(.text)
-    }
-
-    .rodata : { *(.rodata*) }
-
-    .data   : { *(.data) }
-
-    .bss    : {
-	        *(COMMON)
-        *(.bss)
-    }
+	    . = 0x10000;
+    .text   ALIGN(16) : { *(.text) }
+    .rodata ALIGN(16) : { *(.rodata*) }
+    .data   ALIGN(16) : { *(.data) }
+    _bss_start = .;
+    .bss    ALIGN(16) : { *(COMMON); *(.bss); }
+    _bss_end = .;
 }

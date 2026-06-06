@@ -1,36 +1,47 @@
 # BTBX Makefile
-# Requires: nasm, i686-elf-gcc (or i686-linux-gnu-gcc), grub-mkrescue, xorriso
+# Produces btbx.img: a 1.44MB floppy image bootable on realistically any x86.
+#
+# Layout:
+#   Sector  0       stage1 (MBR)        512 bytes
+#   Sectors 1-4     stage2 (loader)    2048 bytes
+#   Sectors 5+      kernel.bin
 
 CC      = i686-elf-gcc
-# If using system cross-compiler:
-# CC    = i686-linux-gnu-gcc
-
 CFLAGS  = -m32 -std=c99 -ffreestanding -fno-builtin -fno-stack-protector \
-          -Wall -Wextra -O2 -Ikernel
-
-AS      = nasm
-ASFLAGS = -f elf32
-
+          -Wall -Wextra -Werror -O2 -Ikernel
 LD      = i686-elf-ld
-# If using system cross-linker:
-# LD    = i686-linux-gnu-ld
-
 LDFLAGS = -m elf_i386 -T linker.ld
+KOBJS   = kernel/entry.o kernel/kernel.o kernel/basic.o
+IMAGE   = btbx.img
 
-TARGET  = btbx.elf
-ISO     = btbx.iso
+.PHONY: all clean run
 
-OBJS    = boot/boot.o kernel/kernel.o kernel/basic.o
+all: $(IMAGE)
 
-.PHONY: all iso clean run
+$(IMAGE): boot/stage1.bin boot/stage2.bin kernel.bin
+	# Create blank 1.44MB floppy image
+	dd if=/dev/zero of=$(IMAGE) bs=512 count=2880 2>/dev/null
+	# Write stage1 to sector 0
+	dd if=boot/stage1.bin of=$(IMAGE) bs=512 count=1 conv=notrunc 2>/dev/null
+	# Write stage2 to sectors 1-4
+	dd if=boot/stage2.bin of=$(IMAGE) bs=512 seek=1 count=4 conv=notrunc 2>/dev/null
+	# Write kernel to sectors 5+
+	dd if=kernel.bin of=$(IMAGE) bs=512 seek=5 conv=notrunc 2>/dev/null
+	@echo "Built $(IMAGE)"
 
-all: $(TARGET)
+kernel.bin: $(KOBJS)
+	$(LD) $(LDFLAGS) -o kernel.elf $(KOBJS)
+	i686-elf-objcopy -O binary kernel.elf $@
+	@echo "kernel.bin: $$(wc -c < kernel.bin) bytes"
 
-$(TARGET): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+boot/stage1.bin: boot/stage1.asm
+	nasm -f bin -o $@ $<
 
-boot/boot.o: boot/boot.asm
-	$(AS) $(ASFLAGS) -o $@ $<
+boot/stage2.bin: boot/stage2.asm
+	nasm -f bin -o $@ $<
+
+kernel/entry.o: kernel/entry.asm
+	nasm -f elf32 -o $@ $<
 
 kernel/kernel.o: kernel/kernel.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -38,20 +49,14 @@ kernel/kernel.o: kernel/kernel.c
 kernel/basic.o: kernel/basic.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-iso: $(TARGET)
-	mkdir -p iso/boot/grub
-	cp $(TARGET) iso/boot/
-	echo 'set timeout=0'                          > iso/boot/grub/grub.cfg
-	echo 'set default=0'                         >> iso/boot/grub/grub.cfg
-	echo 'menuentry "BTBX" {'                    >> iso/boot/grub/grub.cfg
-	echo '  multiboot /boot/btbx.elf'            >> iso/boot/grub/grub.cfg
-	echo '}'                                     >> iso/boot/grub/grub.cfg
-	grub-mkrescue -o $(ISO) iso
-
-run: iso
-	qemu-system-i386 -cdrom $(ISO) -m 32 -nographic 2>/dev/null || \
-	qemu-system-i386 -cdrom $(ISO) -m 32
-
 clean:
-	rm -f $(OBJS) $(TARGET) $(ISO)
-	rm -rf iso/
+	rm -f $(KOBJS) kernel.elf kernel.bin \
+	      boot/stage1.bin boot/stage2.bin $(IMAGE)
+
+# Use -fda for floppy image
+run: $(IMAGE)
+	qemu-system-i386 -fda $(IMAGE) -m 32
+
+# Alt: use as hard disk (if -fda fails on your QEMU version)
+run-hd: $(IMAGE)
+	qemu-system-i386 -drive format=raw,file=$(IMAGE),if=ide,index=0 -boot c -m 32
