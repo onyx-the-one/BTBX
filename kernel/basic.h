@@ -1,14 +1,20 @@
 #ifndef BASIC_H
 #define BASIC_H
 #include <stdint.h>
+
 void term_putchar(char c);
 void term_puts(const char *s);
 void term_puti(int32_t n);
+void term_putf(double f);
 void term_clear(void);
 int  term_getchar(void);
 void term_set_color(uint8_t fg, uint8_t bg);
 void term_get_line(char *buf, int maxlen);
+void term_screen_reset(void);
+void term_sync_cursor(void);
+void term_halt(void);
 void basic_run(void);
+
 #define VGA_BLACK         0
 #define VGA_BLUE          1
 #define VGA_GREEN         2

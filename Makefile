@@ -1,5 +1,5 @@
 # BTBX Makefile
-# Produces btbx.img: a 1.44MB floppy image bootable on realistically any x86.
+# Produces btbx.img: a 1.44MB floppy image bootable on QEMU and real x86.
 #
 # Layout:
 #   Sector  0       stage1 (MBR)        512 bytes
@@ -8,7 +8,7 @@
 
 CC      = i686-elf-gcc
 CFLAGS  = -m32 -std=c99 -ffreestanding -fno-builtin -fno-stack-protector \
-          -Wall -Wextra -Werror -O2 -Ikernel
+          -Wall -Wextra -Werror -O2 -mfpmath=387 -mno-sse -Ikernel
 LD      = i686-elf-ld
 LDFLAGS = -m elf_i386 -T linker.ld
 KOBJS   = kernel/entry.o kernel/kernel.o kernel/basic.o
