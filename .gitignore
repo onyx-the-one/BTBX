@@ -6,3 +6,6 @@ kernel.bin
 kernel.elf
 kernel/*.o
 boot/*.bin
+handoff.txt
+kernel/.wakatime-project
+boot/.wakatime-project
