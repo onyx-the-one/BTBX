@@ -2,27 +2,27 @@
 import struct, sys, os
 
 # 1.44 MB floppy geometry
-SECTORS     = 2880
-SECTOR_SZ   = 512
-SPT         = 18
-HEADS       = 2
-CYLS        = 80
-FAT_COUNT   = 2
-FAT_SECS    = 9
-ROOT_ENTRIES= 224
-ROOT_SECS   = ROOT_ENTRIES * 32 // SECTOR_SZ   # 14
-SECS_CLUS   = 1
-RESERVED    = 1          # only sector 0 is "reserved" in BPB terms
+SECTORS = 2880
+SECTOR_SZ = 512
+SPT = 18
+HEADS = 2
+CYLS = 80
+FAT_COUNT = 2
+FAT_SECS = 9
+ROOT_ENTRIES = 224
+ROOT_SECS = ROOT_ENTRIES * 32 // SECTOR_SZ   # 14
+SECS_CLUS = 1
+RESERVED = 1          # only sector 0 is "reserved" in BPB terms
                          # stage2 lives in the space before FAT starts,
                          # which we handle by putting it in sectors 1-4
                          # and setting RESERVED=5 so FAT starts at LBA 5
 
 # actual layout
 RESERVED_SECS = 5        # LBA 0=stage1, 1-4=stage2, FAT starts at 5
-FAT1_LBA      = RESERVED_SECS
-FAT2_LBA      = FAT1_LBA + FAT_SECS
-ROOT_LBA      = FAT2_LBA + FAT_SECS
-DATA_LBA      = ROOT_LBA + ROOT_SECS
+FAT1_LBA = RESERVED_SECS
+FAT2_LBA = FAT1_LBA + FAT_SECS
+ROOT_LBA = FAT2_LBA + FAT_SECS
+DATA_LBA = ROOT_LBA + ROOT_SECS
 
 img = bytearray(SECTORS * SECTOR_SZ)
 
