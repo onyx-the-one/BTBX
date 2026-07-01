@@ -2,17 +2,17 @@
 BITS 16
 ORG 0x7E00
 
-KERNEL_LBA   equ 37
-KERNEL_SECS  equ 128
-SPT          equ 18
-NHEADS       equ 2
-DRIVE_STASH  equ 0x0600   ; safe scratch byte: BDA ends at 0x4FF, stage1 at 0x7C00
+KERNEL_LBA  equ 37
+KERNEL_SECS equ 128
+SPT         equ 18
+NHEADS      equ 2
+DRIVE_STASH equ 0x0600
 
 start:
     xor ax, ax
     mov ds, ax
     mov es, ax
-    mov [drive], dl         ; save BIOS drive byte immediately
+    mov [drive], dl
 
     mov al, 'S'
     call putc
@@ -27,14 +27,13 @@ start:
     mov al, 'K'
     call putc
 
-    ; stash drive byte for kernel (read from our saved copy, not DL which lba_to_chs trashed)
     mov al, [drive]
     mov [DRIVE_STASH], al
 
     cli
     lgdt [gdtr]
     mov eax, cr0
-    or  al, 1
+    or al, 1
     mov cr0, eax
     jmp 0x08:pmode32
 
@@ -51,81 +50,121 @@ pmode32:
 
 BITS 16
 
-; lba_to_chs: AX=LBA -> CH=cyl, CL=sector(1-based), DH=head  TRASHES AX,BX,DX
+; AX=LBA -> CH=cyl, CL=sector(1-based), DH=head
 lba_to_chs:
     xor dx, dx
     mov bx, SPT
-    div bx              ; AX=track, DX=sector-0
+    div bx
     inc dx
-    mov cl, dl          ; CL = sector (1-based)
+    mov cl, dl
     xor dx, dx
     mov bx, NHEADS
-    div bx              ; AX=cylinder, DX=head
+    div bx
     mov ch, al
     mov dh, dl
     ret
 
 load_kernel:
-    mov word [buf_seg],  0x1000
-    mov word [lba_cur],  KERNEL_LBA
+    mov word [buf_seg], 0x1000
+    mov dword [lba_cur], KERNEL_LBA
     mov word [secs_rem], KERNEL_SECS
-.chunk:
+
+    ; DO NOT probe EDD on floppy drives, it crashes the controller!
+    mov dl, [drive]
+    cmp dl, 0x80
+    jb .chs
+
+    mov byte [use_edd], 0
+    mov ah, 0x41
+    mov bx, 0x55AA
+    int 0x13
+    jc .chs
+    cmp bx, 0xAA55
+    jne .chs
+    test cx, 1
+    jz .chs
+    mov byte [use_edd], 1
+
+.edd_chunk:
+    cmp byte [use_edd], 1
+    jne .chs
+
+    mov ax, [secs_rem]
+    cmp ax, 127
+    jbe .edd_count_ok
+    mov ax, 127
+.edd_count_ok:
+    mov [dap_count], ax
+    mov word [dap_off], 0
+    mov bx, [buf_seg]
+    mov [dap_seg], bx
+    mov eax, [lba_cur]
+    mov [dap_lba_lo], eax
+    mov dword [dap_lba_hi], 0
+
+    mov si, dap
+    mov ah, 0x42
+    mov dl, [drive]
+    int 0x13
+    jc .chs ; Fallback to CHS if EDD read fails
+
+    mov ax, [dap_count]
+    mov bx, ax
+    shl bx, 5
+    add word [buf_seg], bx
+
+    xor dx, dx
+    add word [lba_cur], ax
+    adc word [lba_cur+2], dx
+    sub word [secs_rem], ax
+    jnz .edd_chunk
+    ret
+
+.chs:
+    mov word [buf_seg], 0x1000
+    mov word [lba_cur], KERNEL_LBA
+    mov word [secs_rem], KERNEL_SECS
+.chs_chunk:
     mov ax, [lba_cur]
-    call lba_to_chs         ; CH=cyl, CL=sec, DH=head
+    call lba_to_chs
 
     mov al, SPT
     sub al, cl
-    inc al                  ; AL = sectors left on track incl current
+    inc al
     xor ah, ah
     mov bx, [secs_rem]
     cmp bx, ax
     jbe .cnt_ok
     mov bx, ax
 .cnt_ok:
-    mov al, bl              ; AL = count for this read
+    mov al, bl
 
-    push ax                 ; save count
+    push ax
     mov bx, [buf_seg]
     mov es, bx
     xor bx, bx
     mov ah, 0x02
-    mov dl, [drive]         ; drive from saved copy
+    mov dl, [drive]
     int 0x13
     jc .load_fail
-    pop ax                  ; AL = count read
+    pop ax
 
     xor ah, ah
     mov bx, ax
-    shl bx, 5               ; bx = count*32 (count*512/16)
+    shl bx, 5
     add word [buf_seg], bx
     mov bx, ax
-    add word [lba_cur],  bx
+    add word [lba_cur], bx
     sub word [secs_rem], bx
-    jnz .chunk
+    jnz .chs_chunk
     ret
 
 .load_fail:
-    pop ax
     mov al, '!'
     call putc
-    mov al, 'L'
-    call putc
-    mov al, ah
-    shr al, 4
-    add al, '0'
-    cmp al, '9'
-    jbe .n1
-    add al, 7
-.n1: call putc
-    mov al, ah
-    and al, 0x0F
-    add al, '0'
-    cmp al, '9'
-    jbe .n2
-    add al, 7
-.n2: call putc
     cli
-.hang: hlt
+.hang:
+    hlt
     jmp .hang
 
 kbc_wait_in:
@@ -161,7 +200,6 @@ a20_enable:
     mov al, 0xAE
     out 0x64, al
     call kbc_wait_in
-    ; Fast A20 via port 0x92 as backup
     in al, 0x92
     or al, 0x02
     and al, 0xFE
@@ -174,20 +212,30 @@ putc:
     int 0x10
     ret
 
-drive:    db 0x80
-buf_seg:  dw 0x1000
-lba_cur:  dw 0
-secs_rem: dw 0
+drive:      db 0x80
+use_edd:    db 0
+buf_seg:    dw 0x1000
+lba_cur:    dd 0
+secs_rem:   dw 0
+
+dap:
+    db 16
+    db 0
+dap_count:  dw 0
+dap_off:    dw 0
+dap_seg:    dw 0
+dap_lba_lo: dd 0
+dap_lba_hi: dd 0
 
 gdt:
-    dq 0x0000000000000000
-    dq 0x00CF9A000000FFFF   ; 0x08 32-bit code ring0
-    dq 0x00CF92000000FFFF   ; 0x10 32-bit data ring0
-    dq 0x00009A000000FFFF   ; 0x18 16-bit code (thunk)
-    dq 0x000092000000FFFF   ; 0x20 16-bit data (thunk)
+dq 0x0000000000000000
+dq 0x00CF9A000000FFFF
+dq 0x00CF92000000FFFF
+dq 0x00009A000000FFFF
+dq 0x000092000000FFFF
 
 gdtr:
-    dw gdtr - gdt - 1
-    dd gdt
+dw gdtr - gdt - 1
+dd gdt
 
 times 2048 - ($ - $$) db 0

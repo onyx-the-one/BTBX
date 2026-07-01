@@ -1,70 +1,164 @@
-# BTBX (Bare TinyBASIC eXecutor)
+# BTBX - Bare Tiny(?) BASIC eXecutor
 
-32-bit protected mode x86 BASIC interpreter booting directly from a 1.44MB FAT12 floppy image. 
+Boots on bare-metal x86 and presents a TinyBASIC interpreter.
+
+## Requirements
+
+- nasm
+- i686-elf-gcc, i686-elf-ld, i686-elf-objcopy
+- dd, qemu-system-i386
 
 ## Build
 
-Requires `nasm`, `i686-elf-gcc`, `mtools`, `qemu-system-i386`.
+    make          # 1.44 MB floppy image
+    make run      # test in QEMU as floppy
+    make run-hd   # test in QEMU as hard disk
+    make clean
 
-```bash
-make         # builds btbx.img (1.44MB FAT12 floppy)
-make run     # boot floppy in QEMU
-make clean
-```
+## Boot on real hardware
 
-For real hardware, dump to a USB drive (legacy/CSM BIOS boot required):
-```bash
-sudo dd if=btbx.img of=/dev/sdX bs=512 status=progress
-```
+    sudo dd if=btbx.img of=/dev/sd?? bs=512
 
-Copying sources into the image:
-```bash
-mcopy -i btbx.img hello.bas ::HELLO.BAS
-```
+Enable legacy/CSM BIOS boot on UEFI machines.
 
-## Boot Sequence
+## Boot sequence
 
-POST outputs raw characters to VGA before entering protected mode. 
+| Char   | Meaning                    |
+|--------|----------------------------|
+| S1     | Stage 1 MBR running        |
+|        | Stage 1 jumped to Stage 2  |
+| S2     | Stage 2 running            |
+| A      | A20 line enabled           |
+| K      | Kernel loaded from disk    |
+| banner | Kernel C code running      |
 
-| Output | Meaning |
-|---|---|
-| `S1` | Stage 1 (MBR) initialized. |
-| `>` | Jump to Stage 2 successful. |
-| `S2` | Stage 2 running. |
-| `A` | A20 line enabled. |
-| `K` | Kernel flat binary loaded from disk. |
-| `!` | Halts. Indicates a disk read failure at the preceding step. |
+If it stops at S1 and shows !: disk read in stage 1 failed.
+On screen: S1->S2->A->K then the BTBX banner.
 
-## Disk Layout (FAT12 Floppy)
+## Disk image layout
 
-Managed via `mkfat.py` and `fat12.c`. Must match exactly. 
+| Sectors | Content              |
+|---------|----------------------|
+| 0       | stage1 MBR, 512 B    |
+| 1-4     | stage2 loader        |
+| 5+      | kernel flat binary   |
 
-- LBA 0: Boot sector (stage1)
-- LBA 1-4: Stage2 loader (2048 bytes)
-- LBA 5-13: FAT1
-- LBA 14-22: FAT2
-- LBA 23-36: Root Directory (224 entries)
-- LBA 37+: Data clusters (Kernel loaded here, followed by BASIC payload files)
+## BASIC reference
 
-*Note: INT 13h operations bounce through physical 0x0800 to avoid crossing 64KB physical DMA boundaries.*
+### Variables
 
-## BTBX Language Spec
+- A-Z, arbitrary names up to 31 chars (integer or float)
+- Append $ for string variables: A$, NAME$
 
-Implementation in `basic.c`.
+### Statements
 
-**Types:** 
-Int32, Double (x87 FPU), Strings (64-slot pool, 128 chars max).
-Variables: `A-Z`, `varname`, `string$` (up to 32 chars). Global scope.
+    LET var = expr          bare assignment also works: A = 5
+    PRINT expr [; | ,] ...  semicolon = no newline, comma = tab
+    ? expr ...              alias for PRINT
+    INPUT ["prompt",] var [, var ...]
+    IF cond THEN line|stmt
+    IF cond THEN / ELSE / ENDIF  (multi-line form)
+    FOR var = from TO to [STEP n]
+    NEXT [var]
+    WHILE cond / WEND
+    GOTO line
+    GOSUB line / RETURN
+    DATA val [, val ...]
+    READ var [, var ...]
+    RESTORE
+    REM comment  (or ' comment)
+    END / NEW / LIST / RUN
+    CLEAR    redraw banner
+    HALT     freeze (CLI + HLT)
 
-**Statements:**
-`LET`, `PRINT`, `INPUT`, `IF/THEN[/ELSE/ENDIF]`, `GOTO`, `GOSUB`, `RETURN`, `FOR/TO/STEP/NEXT`, `WHILE/WEND`, `REM`, `HALT`, `CLEAR`, `LIST`, `RUN`, `NEW`
+### Arrays
 
-**File I/O:**
-- `DIR`: Lists root directory.
-- `LOAD "FILE.BAS"`: Loads into program store.
-- `SAVE "FILE.BAS"`: Serializes program store to disk.
+    DIM name(n)            1-D, indices 0..n
+    DIM name(n, m)         2-D, indices 0..n, 0..m
+    DIM name(n, m, p)      3-D
+    DIM A$(10)             string array
+    A(3) = 42
+    PRINT A(3)
 
-**Built-in Functions:**
-- Math: `SIN`, `COS`, `TAN`, `ATN`, `EXP`, `LOG`, `SQR`, `ABS`, `INT`, `FIX`, `SGN`, `RND`, `MOD`
-- Casts: `CINT`, `CDBL`, `STR$`, `VAL`
-- String: `LEFT$`, `RIGHT$`, `MID$`, `CHR$`, `ASC`, `LEN`
+Up to 32 arrays, 512 total elements across all arrays.
+
+### Memory access (inline-assembly backed)
+
+    PEEK(addr)      returns byte at 32-bit physical address
+    POKE addr, val  writes byte to 32-bit physical address
+
+VGA text buffer at 0xB8000. Each cell = 2 bytes (ASCII low, attribute high).
+
+    10 POKE 0xB8000, 65    ' write 'A'
+    20 POKE 0xB8001, 0x1F  ' bright white on blue
+
+### Non-blocking keyboard
+
+    INKEY$    one-char string if a key is waiting, "" if none
+
+    10 K$ = INKEY$
+    20 IF K$ = "" THEN GOTO 10
+    30 PRINT "You pressed: "; K$
+
+### Data file I/O
+
+Files are stored on the FAT12 filesystem alongside the kernel.
+File numbers 1-4. Output buffers (8 KB each) are written to disk on CLOSE.
+
+    OPEN "file.ext" FOR INPUT  AS #n
+    OPEN "file.ext" FOR OUTPUT AS #n
+    CLOSE [#n]              omit #n to close all open files
+    PRINT #n, expr [;|,] ...
+    INPUT #n, var [, var ...]
+
+Write example:
+
+    10 OPEN "DATA.TXT" FOR OUTPUT AS #1
+    20 FOR I = 1 TO 5 : PRINT #1, I; ","; I*I : NEXT I
+    30 CLOSE #1
+
+Read example:
+
+    10 OPEN "DATA.TXT" FOR INPUT AS #1
+    20 INPUT #1, N, SQ
+    30 PRINT N; " squared = "; SQ
+    40 IF N < 5 THEN GOTO 20
+    50 CLOSE #1
+
+### Program file I/O
+
+    LOAD "file.bas"
+    SAVE "file.bas"
+    DIR
+
+    mcopy -i btbx.img hello.bas ::HELLO.BAS
+
+### Functions
+
+| Function        | Description                              |
+|-----------------|------------------------------------------|
+| ABS(x)          | absolute value                           |
+| SQR(x)          | square root                              |
+| SIN(x)          | sine (radians)                           |
+| COS(x)          | cosine                                   |
+| TAN(x)          | tangent                                  |
+| ATN(x)          | arctangent                               |
+| EXP(x)          | e^x                                      |
+| LOG(x)          | natural log                              |
+| INT(x)          | floor (toward -inf)                      |
+| FIX(x)          | truncate toward zero                     |
+| SGN(x)          | -1 / 0 / 1                               |
+| RND             | random float 0-1                         |
+| CINT(x)         | round to integer                         |
+| CDBL(x)         | convert to float                         |
+| MOD(a,b)        | integer modulo                           |
+| PEEK(addr)      | read byte from physical address          |
+| LEN(s$)         | string length                            |
+| CHR$(n)         | character from ASCII code                |
+| ASC(s$)         | ASCII code of first character            |
+| STR$(n)         | number to string                         |
+| VAL(s$)         | string to number                         |
+| LEFT$(s$,n)     | left n characters                        |
+| RIGHT$(s$,n)    | right n characters                       |
+| MID$(s$,p[,n])  | substring from position p (1-based)      |
+| INKEY$          | non-blocking key read; "" if no key      |
