@@ -1,11 +1,13 @@
-; thunk16.asm - real-mode BIOS trampoline
+; thunk16.asm — real-mode BIOS trampoline (ORG 0x7100)
+; Copied to low memory at boot by entry.asm.
+
 BITS 16
 ORG 0x7100
 
-THUNK_REQ   equ 0x7000
-GDTR_SAVE   equ 0x6FE0
-ESP_SAVE    equ 0x6FEC
-THUNK_RET   equ 0x6FF0
+THUNK_REQ equ 0x7000
+GDTR_SAVE equ 0x6FE0
+ESP_SAVE  equ 0x6FEC
+THUNK_RET equ 0x6FF0
 
 thunk_entry:
     mov eax, cr0
@@ -19,8 +21,7 @@ thunk_entry:
     mov es, ax
     mov ss, ax
     mov sp, 0x6E00
-    
-    sti             ; CRITICAL: Enable interrupts so floppy IRQ6 works!
+    sti         ; CRITICAL: Enable interrupts so floppy IRQ6 works!
 
     cmp byte [THUNK_REQ + 0x0B], 0
     je .chs_path
@@ -143,7 +144,7 @@ thunk_entry:
     mov [THUNK_REQ + 0x0A], ah
 
 .return_pm:
-    cli             ; CRITICAL: Disable interrupts before returning to PM!
+    cli         ; CRITICAL: Disable interrupts before returning to PM!
     lgdt [GDTR_SAVE]
     mov eax, cr0
     or al, 1

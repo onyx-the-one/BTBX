@@ -1,54 +1,63 @@
-CC      = i686-elf-gcc
-CFLAGS  = -m32 -std=c99 -ffreestanding -fno-builtin -fno-stack-protector \
-          -Wall -Wextra -Werror -O2 -mfpmath=387 -mno-sse -Ikernel
-LD      = i686-elf-ld
-LDFLAGS = -m elf_i386 -T linker.ld
-KOBJS   = kernel/entry.o kernel/kernel.o kernel/basic.o kernel/fat12.o \
-          kernel/sound.o
-IMAGE   = btbx.img
+# BTBX Makefile — ver. 1.6.32
 
-.PHONY: all clean run run-hd
+CC := i686-elf-gcc
+OBJCOPY := objcopy
+CFLAGS := -m32 -ffreestanding -fno-pic -std=gnu99 \
+-Wall -Wextra -Wno-unused-parameter \
+-O2 -mfpmath=387 -fno-stack-protector \
+-I src/kernel -I src/kernel/fs -I src/kernel/sound
+NASM := nasm
+PYTHON := python3
 
-all: $(IMAGE)
+CSRCS := src/kernel/kernel.c \
+src/kernel/basic.c \
+src/kernel/fs/fat12.c \
+src/kernel/sound/sound.c
+COBJS := $(CSRCS:.c=.o)
+ASMS := src/kernel/entry.asm
+AOBJS := src/kernel/entry.o
+BOOTMETA := boot/bootmeta.inc
 
-$(IMAGE): boot/stage1.bin boot/stage2.bin kernel.bin
-	python3 mkfat.py
-	@echo "Built $(IMAGE)"
-
-kernel.bin: kernel/thunk16.bin $(KOBJS)
-	$(LD) $(LDFLAGS) -o kernel.elf $(KOBJS)
-	i686-elf-objcopy -O binary kernel.elf kernel.bin
-
-kernel/thunk16.bin: kernel/thunk16.asm
-	nasm -f bin -o $@ $<
+all: btbx.img
 
 boot/stage1.bin: boot/stage1.asm
-	nasm -f bin -o $@ $<
+	$(NASM) -f bin -o $@ $<
 
-boot/stage2.bin: boot/stage2.asm
-	nasm -f bin -o $@ $<
+boot/stage2.bin: boot/stage2.asm $(BOOTMETA)
+	$(NASM) -I boot/ -f bin -o $@ $<
 
-kernel/entry.o: kernel/entry.asm kernel/thunk16.bin
-	nasm -f elf32 -o $@ $<
+src/kernel/fs/thunk16.bin: src/kernel/fs/thunk16.asm
+	$(NASM) -f bin -o $@ $<
 
-kernel/kernel.o: kernel/kernel.c
+%.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-kernel/basic.o: kernel/basic.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+src/kernel/entry.o: src/kernel/entry.asm src/kernel/fs/thunk16.bin
+	$(NASM) -f elf32 -o $@ $<
 
-kernel/fat12.o: kernel/fat12.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+kernel.bin: $(AOBJS) $(COBJS) linker.ld
+	$(CC) -m32 -ffreestanding -nostdlib -T linker.ld \
+	-o kernel.elf $(AOBJS) $(COBJS) -lgcc
+	$(OBJCOPY) -O binary kernel.elf $@
 
-kernel/sound.o: kernel/sound.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(BOOTMETA): kernel.bin mkfat.py
+	$(PYTHON) mkfat.py --bootmeta
+
+btbx.img: boot/stage1.bin boot/stage2.bin kernel.bin mkfat.py
+	$(PYTHON) mkfat.py
+
+run: btbx.img
+	qemu-system-i386 -drive file=btbx.img,format=raw,if=floppy \
+	-boot a -m 4 -display curses -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
+
+run-vga: btbx.img
+	qemu-system-i386 -drive file=btbx.img,format=raw,if=floppy \
+	-boot a -m 4 -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
 
 clean:
-	rm -f $(KOBJS) kernel.elf kernel.bin kernel/thunk16.bin \
-	      boot/stage1.bin boot/stage2.bin $(IMAGE)
+	rm -f $(COBJS) $(AOBJS) \
+	boot/stage1.bin boot/stage2.bin boot/bootmeta.inc \
+	src/kernel/fs/thunk16.bin \
+	kernel.elf kernel.bin btbx.img
 
-run: $(IMAGE)
-	qemu-system-i386 -fda $(IMAGE) -m 32 -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
-
-run-hd: $(IMAGE)
-	qemu-system-i386 -drive format=raw,file=$(IMAGE),if=ide,index=0 -boot c -m 32 -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
+.PHONY: all run run-vga clean
