@@ -1,6 +1,8 @@
 #include "basic.h"
 #include "fs/fat12.h"
 #include "sound/sound.h"
+#include "rtc/rtc.h"
+#include "gfx/gfx.h"
 
 /* ── x87 math helpers ────────────────────────────────────────────── */
 static double x87sin(double x){double r;__asm__("fsin":"=t"(r):"0"(x));return r;}
@@ -35,6 +37,14 @@ static void sfree(int i){if(i>=0&&i<NSTRS)sused[i]=0;}
 static Val vint(int32_t i){Val v;v.ty=TY_INT;v.i=i;v.f=(double)i;v.si=-1;return v;}
 static Val vflt(double f){Val v;v.ty=TY_FLOAT;v.f=f;v.i=(int32_t)f;v.si=-1;return v;}
 static Val vstr(int si){Val v;v.ty=TY_STR;v.si=si;v.i=0;v.f=0;return v;}
+
+static int32_t toint(Val v){return v.ty==TY_FLOAT?(int32_t)v.f:v.i;}
+static Val vbitand(Val a,Val b){return vint(toint(a)&toint(b));}
+static Val vbitor(Val a,Val b){return vint(toint(a)|toint(b));}
+static Val vbitxor(Val a,Val b){return vint(toint(a)^toint(b));}
+static Val vbitnot(Val a){return vint(~toint(a));}
+static Val vshl(Val a,Val b){return vint((int32_t)((uint32_t)toint(a) << (toint(b)&31)));}
+static Val vshr(Val a,Val b){return vint((int32_t)((uint32_t)toint(a) >> (toint(b)&31)));}
 
 /* ── Arithmetic helpers ──────────────────────────────────────────── */
 #define NUMVAL(v) ((v).ty==TY_FLOAT?(v).f:(double)(v).i)
@@ -120,7 +130,7 @@ static Val expr(void);
 static Val strexpr(void);
 
 /* ── Number literal ──────────────────────────────────────────────── */
-static int pnum(double *o){sw();if(!((*pp>='0'&&*pp<='9')||(*pp=='.'&&pp[1]>='0'&&pp[1]<='9')))return 0;double v=0;int fdiv=1,frac=0;while(*pp>='0'&&*pp<='9')v=v*10+(*pp++-'0');if(*pp=='.'){pp++;while(*pp>='0'&&*pp<='9'){v=v*10+(*pp++-'0');fdiv*=10;frac=1;}}if(frac)v/=fdiv;if(*pp=='E'||*pp=='e'){pp++;int neg=0,ex=0;if(*pp=='-'){neg=1;pp++;}else if(*pp=='+')pp++;while(*pp>='0'&&*pp<='9')ex=ex*10+(*pp++-'0');double m=1;for(int i=0;i<ex;i++)m*=10.0;if(neg)v/=m;else v*=m;}*o=v;return 1;}
+static int pnum(double *o){sw();if(*pp=='&'&&(pp[1]=='H'||pp[1]=='h')){pp+=2;uint32_t v=0;int got=0;for(;;){char c=*pp;int d=-1;if(c>='0'&&c<='9')d=c-'0';else if(c>='A'&&c<='F')d=10+(c-'A');else if(c>='a'&&c<='f')d=10+(c-'a');else break;v=(v<<4)|(uint32_t)d;pp++;got=1;}if(!got)return 0;*o=(double)(int32_t)v;return 1;}if(*pp=='&'&&(pp[1]=='B'||pp[1]=='b')){pp+=2;uint32_t v=0;int got=0;while(*pp=='0'||*pp=='1'){v=(v<<1)|(uint32_t)(*pp++-'0');got=1;}if(!got)return 0;*o=(double)(int32_t)v;return 1;}if(!((*pp>='0'&&*pp<='9')||(*pp=='.'&&pp[1]>='0'&&pp[1]<='9')))return 0;double v=0;int fdiv=1,frac=0;while(*pp>='0'&&*pp<='9')v=v*10+(*pp++-'0');if(*pp=='.'){pp++;while(*pp>='0'&&*pp<='9'){v=v*10+(*pp++-'0');fdiv*=10;frac=1;}}if(frac)v/=fdiv;if(*pp=='E'||*pp=='e'){pp++;int neg=0,ex=0;if(*pp=='-'){neg=1;pp++;}else if(*pp=='+')pp++;while(*pp>='0'&&*pp<='9')ex=ex*10+(*pp++-'0');double m=1;for(int i=0;i<ex;i++)m*=10.0;if(neg)v/=m;else v*=m;}*o=v;return 1;}
 static int isstrname(const char *nm){int i=0;while(nm[i])i++;return i>0&&nm[i-1]=='$';}
 
 /* ── Array helpers ───────────────────────────────────────────────── */
@@ -142,27 +152,32 @@ static Val callstrfn(const char *nm){
     if(bstreq(nm,"CHR$")){Val n=expr();if(err)return vstr(-1);sw();if(*pp!=')'){berr("SYNTAX");return vstr(-1);}pp++;int r=snew();if(r<0){berr("MEM");return vstr(-1);}spool[r][0]=(char)n.i;spool[r][1]=0;return vstr(r);}
     if(bstreq(nm,"VAL")){Val s=strexpr();if(err)return vint(0);sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;const char *p=spool[s.si];int neg=0;double n=0;int fdiv=1,frac=0;if(*p=='-'){neg=1;p++;}while(*p>='0'&&*p<='9')n=n*10+(*p++-'0');if(*p=='.'){p++;while(*p>='0'&&*p<='9'){n=n*10+(*p++-'0');fdiv*=10;frac=1;}}if(frac)n/=fdiv;if(neg)n=-n;if(s.ty==TY_STR)sfree(s.si);return n!=(double)(int32_t)n?vflt(n):vint((int32_t)n);}
     if(bstreq(nm,"ASC")){Val s=strexpr();if(err)return vint(0);sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;int c=(unsigned char)spool[s.si][0];if(s.ty==TY_STR)sfree(s.si);return vint(c);}
-    if(bstreq(nm,"INKEY$")){pp--;int r=snew();if(r<0){berr("MEM");return vstr(-1);}int c=term_peekkey();spool[r][0]=c?(char)c:0;spool[r][1]=0;return vstr(r);}
+    if(bstreq(nm,"HEX$")){Val n=expr();if(err)return vstr(-1);sw();if(*pp!=')'){berr("SYNTAX");return vstr(-1);}pp++;int r=snew();if(r<0){berr("MEM");return vstr(-1);}uint32_t v=(uint32_t)toint(n);char *d=spool[r];int i=0,start=0;for(int s=28;s>=0;s-=4){char c="0123456789ABCDEF"[(v>>s)&0xF];if(c!='0'||start||s==0){d[i++]=c;start=1;}}d[i]=0;return vstr(r);}
+if(bstreq(nm,"BIN$")){Val n=expr();if(err)return vstr(-1);sw();if(*pp!=')'){berr("SYNTAX");return vstr(-1);}pp++;int r=snew();if(r<0){berr("MEM");return vstr(-1);}uint32_t v=(uint32_t)toint(n);char *d=spool[r];int i=0,start=0;for(int s=31;s>=0;s--){char c=((v>>s)&1)?'1':'0';if(c!='0'||start||s==0){d[i++]=c;start=1;}}d[i]=0;return vstr(r);}
+if(bstreq(nm,"DATE$")){pp--;if(*pp=='('){pp++;sw();if(*pp!=')'){berr("SYNTAX");return vstr(-1);}pp++;}int r=snew();if(r<0){berr("MEM");return vstr(-1);}RtcTime rt;if(rtc_read(&rt)<0){berr("RTC");return vstr(-1);}rtc_format_date(&rt,spool[r],SLEN);return vstr(r);}
+if(bstreq(nm,"TIME$")){pp--;if(*pp=='('){pp++;sw();if(*pp!=')'){berr("SYNTAX");return vstr(-1);}pp++;}int r=snew();if(r<0){berr("MEM");return vstr(-1);}RtcTime rt;if(rtc_read(&rt)<0){berr("RTC");return vstr(-1);}rtc_format_time(&rt,spool[r],SLEN);return vstr(r);}
+if(bstreq(nm,"INKEY$")){pp--;int r=snew();if(r<0){berr("MEM");return vstr(-1);}int c=term_peekkey();spool[r][0]=c?(char)c:0;spool[r][1]=0;return vstr(r);}
     berr("UNKNOWN FUNCTION");return vstr(-1);}
 
 /* ── Numeric functions ───────────────────────────────────────────── */
 static Val numfn(const char *nm){
     sw();pp++;Val a=expr();if(err)return vint(0);Val second=vint(0);int hassecond=0;sw();if(*pp==','){pp++;second=expr();if(err)return vint(0);hassecond=1;}sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;
     if(bstreq(nm,"MOD")){if(!hassecond){berr("SYNTAX");return vint(0);}return vmod(a,second);}
-    if(bstreq(nm,"SIN"))return vflt(x87sin(NUMVAL(a)));
-    if(bstreq(nm,"COS"))return vflt(x87cos(NUMVAL(a)));
-    if(bstreq(nm,"TAN"))return vflt(x87tan(NUMVAL(a)));
-    if(bstreq(nm,"ATN"))return vflt(x87atn(NUMVAL(a)));
+    if(bstreq(nm,"SIN"))return vflt(x87sin(NUMVAL(a)));if(bstreq(nm,"COS"))return vflt(x87cos(NUMVAL(a)));
+    if(bstreq(nm,"TAN"))return vflt(x87tan(NUMVAL(a)));if(bstreq(nm,"ATN"))return vflt(x87atn(NUMVAL(a)));
     if(bstreq(nm,"EXP"))return vflt(x87exp(NUMVAL(a)));
     if(bstreq(nm,"LOG")){if(a.f<=0){berr("MATH");return vint(0);}return vflt(x87log(NUMVAL(a)));}
     if(bstreq(nm,"SQR")){if(a.f<0){berr("MATH");return vint(0);}return vflt(x87sqrt(NUMVAL(a)));}
     if(bstreq(nm,"ABS"))return a.ty==TY_FLOAT?vflt(x87abs(a.f)):vint(a.i<0?-a.i:a.i);
-    if(bstreq(nm,"INT"))return vflt(x87int(NUMVAL(a)));
-    if(bstreq(nm,"FIX"))return vflt(x87fix(NUMVAL(a)));
-    if(bstreq(nm,"SGN"))return vint(x87sgn(NUMVAL(a)));
-    if(bstreq(nm,"RND"))return vflt(rnd());
-    if(bstreq(nm,"CINT"))return vint((int32_t)(NUMVAL(a)+0.5));
-    if(bstreq(nm,"CDBL"))return vflt(NUMVAL(a));
+    if(bstreq(nm,"INT"))return vflt(x87int(NUMVAL(a)));if(bstreq(nm,"FIX"))return vflt(x87fix(NUMVAL(a)));
+    if(bstreq(nm,"SGN"))return vint(x87sgn(NUMVAL(a)));if(bstreq(nm,"RND"))return vflt(rnd());
+    if(bstreq(nm,"CINT"))return vint((int32_t)(NUMVAL(a)+0.5));if(bstreq(nm,"CDBL"))return vflt(NUMVAL(a));
+    if(bstreq(nm,"AND")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitand(a,second);}
+    if(bstreq(nm,"OR")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitor(a,second);}
+    if(bstreq(nm,"XOR")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitxor(a,second);}
+    if(bstreq(nm,"SHL")){if(!hassecond){berr("SYNTAX");return vint(0);}return vshl(a,second);}
+    if(bstreq(nm,"SHR")){if(!hassecond){berr("SYNTAX");return vint(0);}return vshr(a,second);}
+    if(bstreq(nm,"NOT"))return vbitnot(a);
     if(bstreq(nm,"PEEK")){uint8_t *p=(uint8_t*)(uint32_t)a.i;return vint((int32_t)*p);}
     berr("UNKNOWN FUNCTION");return vint(0);}
 
@@ -196,6 +211,7 @@ static Val fact(void){
         if(isstrname(nm)){pp=save;return strexpr();}
         if(bstreq(nm,"LEN")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val s=strexpr();if(err)return vint(0);sw();if(*pp!=')')berr("SYNTAX");else pp++;int l=bstrlen(spool[s.si]);if(s.ty==TY_STR)sfree(s.si);return vint(l);}
         if(bstreq(nm,"PEEK")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val a=expr();if(err)return vint(0);sw();if(*pp!=')')berr("SYNTAX");else pp++;uint8_t *p=(uint8_t*)(uint32_t)a.i;return vint((int32_t)*p);}
+        if(bstreq(nm,"POINT")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val x=expr();if(err)return vint(0);sw();if(*pp!=','){berr("SYNTAX");return vint(0);}pp++;Val y=expr();if(err)return vint(0);sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;return vint(gfx_getpixel(x.i,y.i));}
         if(*pp=='('){Array *ar=arrget(nm);if(ar){pp++;Val i1=expr();if(err)return vint(0);Val i2=vint(0),i3=vint(0);if(*pp==','){pp++;i2=expr();if(err)return vint(0);}if(*pp==','){pp++;i3=expr();if(err)return vint(0);}sw();if(*pp!=')')berr("SYNTAX");else pp++;int idx=arridx(ar,i1.i,i2.i,i3.i);if(idx<0)return vint(0);Val el=aelems[idx];if(el.ty==TY_STR){int r=snew();if(r<0){berr("MEM");return vint(0);}bstrcpy(spool[r],el.si>=0?spool[el.si]:"",SLEN);return vstr(r);}return el;}return numfn(nm);}
         if(bstreq(nm,"RND"))return vflt(rnd());
         Var *vp=varget(nm);return vp?vp->val:vint(0);}
@@ -536,6 +552,8 @@ static void stmt(const char *line){
 #include "stmt/flow.inc"
 #include "stmt/file.inc"
 #include "stmt/system.inc"
+#include "stmt/graphics.inc"
+berr("WHAT?");
 }
 
 /* ── REPL ────────────────────────────────────────────────────────── */

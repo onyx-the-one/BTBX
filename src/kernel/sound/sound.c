@@ -13,7 +13,7 @@ static int sam_strlen(const char *s){int n=0;while(s[n])n++;return n;}
 static void sam_memset(void *p,int c,int n){unsigned char *b=(unsigned char*)p;while(n--)*b++=(unsigned char)c;}
 
 /* ── BEEP ─────────────────────────────────────────────────────────── */
-static void delay_ms(uint32_t ms){
+void delay_ms(uint32_t ms){
     while(ms--){
         uint32_t ticks=1193u;
         outb(0x43,0x00);

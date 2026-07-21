@@ -35,6 +35,8 @@ thunk_entry:
     je .edd_probe
     cmp byte [THUNK_REQ + 0x0B], 5
     je .reset
+    cmp byte [THUNK_REQ + 0x0B], 6
+    je .set_video
     mov byte [THUNK_REQ + 0x0A], 0x01
     jmp .return_pm
 
@@ -43,6 +45,12 @@ thunk_entry:
     mov dl, [THUNK_REQ + 0x00]
     int 0x13
     jmp .done
+
+.set_video:
+    mov al, [THUNK_REQ + 0x00]
+    mov ah, 0x00
+    int 0x10
+    jmp .done_ok
 
 .edd_probe:
     mov ah, 0x41

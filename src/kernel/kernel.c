@@ -54,7 +54,7 @@ void kpanic(const char *msg){term_set_color(VGA_RED,VGA_WHITE);term_puts(" KERNE
 /* ── Boot banner ──────────────────────────────────────────────────── */
 static void banner_row(const char *s,uint8_t fg,uint8_t bg){term_set_color(fg,bg);term_putchar(' ');const char *p=s;int len=0;while(*p++)len++;term_puts(s);for(int i=len+1;i<COLS;i++)term_putchar(' ');}
 
-void draw_banner(void){term_clear();banner_row("",VGA_BLACK,VGA_CYAN);banner_row("BTBX / Bare Tiny(?) BASIC eXecutor",VGA_WHITE,VGA_BLUE);banner_row("x86-32  ver. 1.6.32  2026",VGA_LIGHT_GREY,VGA_BLUE);banner_row("",VGA_BLACK,VGA_CYAN);term_set_color(VGA_DARK_GREY,VGA_BLACK);for(int i=0;i<COLS;i++)term_putchar('-');term_putchar('\n');term_set_color(VGA_LIGHT_GREY,VGA_BLACK);}
+void draw_banner(void){term_clear();banner_row("",VGA_BLACK,VGA_CYAN);banner_row("BTBX / Bare Tiny(?) BASIC eXecutor",VGA_WHITE,VGA_BLUE);banner_row("x86-32  ver. 1.7.8  20-07-2026",VGA_LIGHT_GREY,VGA_BLUE);banner_row("",VGA_BLACK,VGA_CYAN);term_set_color(VGA_DARK_GREY,VGA_BLACK);for(int i=0;i<COLS;i++)term_putchar('-');term_putchar('\n');term_set_color(VGA_LIGHT_GREY,VGA_BLACK);}
 
 /* ── Kernel entry ─────────────────────────────────────────────────── */
 void kernel_main(uint8_t boot_drive){

@@ -7,7 +7,7 @@
     if(kw("RETURN")){if(csp<=0){berr("RETURN WITHOUT GOSUB");return;}pc=cstk[--csp];return;}
 
     /* FOR */
-    if(kw("FOR")){sw();char nm5[NAMELEN];if(!readname(nm5,NAMELEN)){berr("SYNTAX");return;}sw();if(*pp!='='){berr("SYNTAX");return;}pp++;Val from=expr();if(err)return;if(!kw("TO")){berr("SYNTAX");return;}Val to=expr();if(err)return;Val step=vint(1);if(kw("STEP")){step=expr();if(err)return;}if(!step.i&&!step.f){berr("STEP 0");return;}varset(nm5,from);int go=step.f>=0?vcmp(from,to)<=0:vcmp(from,to)>=0;if(!go){int depth=0;while(pc<Pn){const char *t=P[pc].txt;const char *sv=pp;pp=t;if(kw("FOR"))depth++;else if(kw("NEXT")){if(!depth){pp=sv;pc++;return;}depth--;}pp=sv;pc++;}return;}if(fsp>=FORDEPTH){berr("FOR OVERFLOW");return;}ForFrame *f=&fstk[fsp++];bstrcpy(f->var,nm5,NAMELEN);f->lim=to;f->step=step;f->ret=pc;return;}
+    if(kw("FOR")){sw();char nm5[NAMELEN];if(!readname(nm5,NAMELEN)){berr("SYNTAX");return;}sw();if(*pp!='='){berr("SYNTAX");return;}pp++;Val from=expr();if(err)return;sw();if(!kw("TO")){berr("SYNTAX");return;}sw();Val to=expr();if(err)return;Val step=vint(1);sw();if(kw("STEP")){sw();step=expr();if(err)return;}if(!step.i&&!step.f){berr("STEP 0");return;}varset(nm5,from);int go=step.f>=0?vcmp(from,to)<=0:vcmp(from,to)>=0;if(!go){int depth=0;while(pc<Pn){const char *t=P[pc].txt;const char *sv=pp;pp=t;if(kw("FOR"))depth++;else if(kw("NEXT")){if(!depth){pp=sv;pc++;return;}depth--;}pp=sv;pc++;}return;}if(fsp>=FORDEPTH){berr("FOR OVERFLOW");return;}ForFrame *f=&fstk[fsp++];bstrcpy(f->var,nm5,NAMELEN);f->lim=to;f->step=step;f->ret=pc;return;}
 
     /* NEXT — search the frame stack by name so a GOTO that jumps out of an
        inner loop (skipping its NEXT) doesn't corrupt an outer loop's frame.
@@ -48,7 +48,7 @@
             if(op){Val b=expr();if(err)return;cond=vint(applyrel(op,a,b));}
             else cond=a;
         }
-        if(!kw("THEN")){berr("SYNTAX");return;}sw();
+        sw();if(!kw("THEN")){berr("SYNTAX");return;}sw();
         if(*pp>='0'&&*pp<='9'){if(!cond.i&&!cond.f)return;Val n=expr();if(err)return;int i=findge((int)n.i);if(i>=Pn||(int)P[i].num!=(int)n.i){berr("LINE NOT FOUND");return;}pc=i;return;}
         /* single-line inline IF: "IF cond THEN <stmt>" — execute stmt if true,
            otherwise this is a no-op (there is no block to skip to). */
@@ -59,4 +59,4 @@
     if(kw("ELSE")||kw("ENDIF")){int depth=0;while(pc<Pn){const char *t=P[pc].txt;const char *sv=pp;pp=t;if(kw("IF"))depth++;else if(kw("ENDIF")){if(!depth){pp=sv;return;}depth--;}pp=sv;pc++;}return;}
 
     /* ON cond GOTO/GOSUB */
-    if(kw("ON")){Val cond=expr();if(err)return;int isgosub=0;if(kw("GOSUB"))isgosub=1;else if(!kw("GOTO")){berr("SYNTAX");return;}int idx=(int)cond.i,ci=0;for(;;){sw();Val n=expr();if(err)return;ci++;if(ci==idx){int i=findge((int)n.i);if(i>=Pn||(int)P[i].num!=(int)n.i){berr("LINE NOT FOUND");return;}if(isgosub){if(csp>=CALLDEPTH){berr("GOSUB OVERFLOW");return;}cstk[csp++]=pc;}pc=i;return;}sw();if(*pp!=',')break;pp++;}return;}
+    if(kw("ON")){Val cond=expr();if(err)return;sw();int isgosub=0;if(kw("GOSUB"))isgosub=1;else if(!kw("GOTO")){berr("SYNTAX");return;}sw();int idx=(int)cond.i,ci=0;for(;;){sw();Val n=expr();if(err)return;ci++;if(ci==idx){int i=findge((int)n.i);if(i>=Pn||(int)P[i].num!=(int)n.i){berr("LINE NOT FOUND");return;}if(isgosub){if(csp>=CALLDEPTH){berr("GOSUB OVERFLOW");return;}cstk[csp++]=pc;}pc=i;return;}sw();if(*pp!=',')break;pp++;}return;}

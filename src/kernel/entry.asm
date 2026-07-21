@@ -3,6 +3,7 @@ BITS 32
 
 GLOBAL _start
 GLOBAL bios_disk_thunk
+GLOBAL bios_set_video_mode
 EXTERN kernel_main
 
 THUNK_BASE  equ 0x7100
@@ -79,6 +80,37 @@ bios_disk_thunk:
 
 thunk_returned:
     movzx eax, byte [THUNK_REQ + 0x0A]
+    mov [esp+28], eax   ; poke return value into pushad's eax slot
+
+    popad
+    ret
+
+; int bios_set_video_mode(int mode)
+; Calling convention: cdecl — single arg on stack above saved regs (pushad = 32 bytes)
+; Returns 0 on success, -1 on failure.
+bios_set_video_mode:
+    pushad
+    mov [ESP_SAVE], esp
+
+    mov eax, esp
+    add eax, 36         ; skip pushad(32) + return addr(4)
+
+    mov bl, [eax+0]
+    mov [THUNK_REQ + 0x00], bl  ; video mode
+    mov byte [THUNK_REQ + 0x0B], 6  ; opcode 6 = set video mode
+
+    mov dword [THUNK_RET], video_thunk_returned
+    jmp 0x18:THUNK_BASE
+
+video_thunk_returned:
+    movzx eax, byte [THUNK_REQ + 0x0A]
+    test eax, eax
+    jz .video_ok
+    mov eax, -1
+    jmp .video_done
+.video_ok:
+    xor eax, eax
+.video_done:
     mov [esp+28], eax   ; poke return value into pushad's eax slot
 
     popad

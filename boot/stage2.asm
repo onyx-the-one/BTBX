@@ -2,7 +2,7 @@
 BITS 16
 ORG 0x7E00
 
-%include "bootmeta.inc"
+%include "boot/bootmeta.inc"
 
 SPT equ 18
 NHEADS equ 2
@@ -63,6 +63,19 @@ mov ch, al
 mov dh, dl
 ret
 
+; sectors left before [buf_seg]:0000 crosses a 64K linear boundary
+; NOTE: clobbers ax, cx, dx — caller must save/restore cx if it holds
+; CHS values that must survive this call (see .chs_chunk).
+secs_to_64k:
+movzx eax, word [buf_seg]
+shl eax, 4
+and eax, 0xFFFF
+mov ecx, 0x10000
+sub ecx, eax
+shr ecx, 9
+mov ax, cx
+ret
+
 load_kernel:
 mov word [buf_seg], 0x1000
 mov dword [lba_cur], KERNEL_LBA
@@ -121,15 +134,27 @@ mov word [secs_rem], KERNEL_SECS
 .chs_chunk:
 mov ax, [lba_cur]
 call lba_to_chs
+; CH/CL now hold cylinder/sector for this read — must survive until INT 13h
 mov al, SPT
 sub al, cl
 inc al
 xor ah, ah
 mov bx, [secs_rem]
 cmp bx, ax
+jbe .cnt_track_ok
+mov bx, ax
+.cnt_track_ok:
+push cx                 ; secs_to_64k clobbers cx — save the CHS values
+call secs_to_64k
+pop cx
+cmp bx, ax
 jbe .cnt_ok
 mov bx, ax
 .cnt_ok:
+test bx, bx
+jnz .cnt_nonzero
+mov bx, 1
+.cnt_nonzero:
 mov al, bl
 push ax
 mov bx, [buf_seg]
@@ -227,5 +252,4 @@ gdtr:
 dw gdtr - gdt - 1
 dd gdt
 
-times 2048 - ($ - $$) db 0
 times 2048 - ($ - $$) db 0

@@ -25,8 +25,7 @@ the conventional memory below 640 KB and requires no external runtime.
 ```sh
 # Prerequisites: nasm, i686-elf-gcc (cross-compiler), python3, qemu
 make
-make run          # QEMU in terminal (curses)
-make run-vga      # QEMU with SDL/GTK window
+make run          # QEMU with SDL/GTK window
 ```
 
 ## Source layout

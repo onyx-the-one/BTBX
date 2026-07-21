@@ -5,4 +5,5 @@ void beep(uint32_t freq, uint32_t ms);
 void speaker_on(uint32_t freq);
 void speaker_off(void);
 void say_string(const char *s);
+void delay_ms(uint32_t ms);
 #endif
