@@ -163,15 +163,20 @@ if(bstreq(nm,"INKEY$")){pp--;int r=snew();if(r<0){berr("MEM");return vstr(-1);}i
 static Val numfn(const char *nm){
     sw();pp++;Val a=expr();if(err)return vint(0);Val second=vint(0);int hassecond=0;sw();if(*pp==','){pp++;second=expr();if(err)return vint(0);hassecond=1;}sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;
     if(bstreq(nm,"MOD")){if(!hassecond){berr("SYNTAX");return vint(0);}return vmod(a,second);}
-    if(bstreq(nm,"SIN"))return vflt(x87sin(NUMVAL(a)));if(bstreq(nm,"COS"))return vflt(x87cos(NUMVAL(a)));
-    if(bstreq(nm,"TAN"))return vflt(x87tan(NUMVAL(a)));if(bstreq(nm,"ATN"))return vflt(x87atn(NUMVAL(a)));
+    if(bstreq(nm,"SIN"))return vflt(x87sin(NUMVAL(a)));
+if(bstreq(nm,"COS"))return vflt(x87cos(NUMVAL(a)));
+    if(bstreq(nm,"TAN"))return vflt(x87tan(NUMVAL(a)));
+if(bstreq(nm,"ATN"))return vflt(x87atn(NUMVAL(a)));
     if(bstreq(nm,"EXP"))return vflt(x87exp(NUMVAL(a)));
     if(bstreq(nm,"LOG")){if(a.f<=0){berr("MATH");return vint(0);}return vflt(x87log(NUMVAL(a)));}
     if(bstreq(nm,"SQR")){if(a.f<0){berr("MATH");return vint(0);}return vflt(x87sqrt(NUMVAL(a)));}
     if(bstreq(nm,"ABS"))return a.ty==TY_FLOAT?vflt(x87abs(a.f)):vint(a.i<0?-a.i:a.i);
-    if(bstreq(nm,"INT"))return vflt(x87int(NUMVAL(a)));if(bstreq(nm,"FIX"))return vflt(x87fix(NUMVAL(a)));
-    if(bstreq(nm,"SGN"))return vint(x87sgn(NUMVAL(a)));if(bstreq(nm,"RND"))return vflt(rnd());
-    if(bstreq(nm,"CINT"))return vint((int32_t)(NUMVAL(a)+0.5));if(bstreq(nm,"CDBL"))return vflt(NUMVAL(a));
+    if(bstreq(nm,"INT"))return vflt(x87int(NUMVAL(a)));
+if(bstreq(nm,"FIX"))return vflt(x87fix(NUMVAL(a)));
+    if(bstreq(nm,"SGN"))return vint(x87sgn(NUMVAL(a)));
+if(bstreq(nm,"RND"))return vflt(rnd());
+    if(bstreq(nm,"CINT"))return vint((int32_t)(NUMVAL(a)+0.5));
+if(bstreq(nm,"CDBL"))return vflt(NUMVAL(a));
     if(bstreq(nm,"AND")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitand(a,second);}
     if(bstreq(nm,"OR")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitor(a,second);}
     if(bstreq(nm,"XOR")){if(!hassecond){berr("SYNTAX");return vint(0);}return vbitxor(a,second);}
@@ -211,7 +216,6 @@ static Val fact(void){
         if(isstrname(nm)){pp=save;return strexpr();}
         if(bstreq(nm,"LEN")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val s=strexpr();if(err)return vint(0);sw();if(*pp!=')')berr("SYNTAX");else pp++;int l=bstrlen(spool[s.si]);if(s.ty==TY_STR)sfree(s.si);return vint(l);}
         if(bstreq(nm,"PEEK")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val a=expr();if(err)return vint(0);sw();if(*pp!=')')berr("SYNTAX");else pp++;uint8_t *p=(uint8_t*)(uint32_t)a.i;return vint((int32_t)*p);}
-        if(bstreq(nm,"POINT")){sw();if(*pp!='('){berr("SYNTAX");return vint(0);}pp++;Val x=expr();if(err)return vint(0);sw();if(*pp!=','){berr("SYNTAX");return vint(0);}pp++;Val y=expr();if(err)return vint(0);sw();if(*pp!=')'){berr("SYNTAX");return vint(0);}pp++;return vint(gfx_getpixel(x.i,y.i));}
         if(*pp=='('){Array *ar=arrget(nm);if(ar){pp++;Val i1=expr();if(err)return vint(0);Val i2=vint(0),i3=vint(0);if(*pp==','){pp++;i2=expr();if(err)return vint(0);}if(*pp==','){pp++;i3=expr();if(err)return vint(0);}sw();if(*pp!=')')berr("SYNTAX");else pp++;int idx=arridx(ar,i1.i,i2.i,i3.i);if(idx<0)return vint(0);Val el=aelems[idx];if(el.ty==TY_STR){int r=snew();if(r<0){berr("MEM");return vint(0);}bstrcpy(spool[r],el.si>=0?spool[el.si]:"",SLEN);return vstr(r);}return el;}return numfn(nm);}
         if(bstreq(nm,"RND"))return vflt(rnd());
         Var *vp=varget(nm);return vp?vp->val:vint(0);}
