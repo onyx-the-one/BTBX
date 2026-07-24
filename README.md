@@ -1,5 +1,5 @@
 # BTBX — Bare Tiny(?) BASIC eXecutor
-**Version 1.6.32**
+**Version 1.7.112**
 
 BTBX is a self-contained BASIC interpreter that boots directly from a FAT12 floppy image (or virtual floppy/HDD) with no underlying OS. it is the OS. It fits entirely in conventional memory below 640 KB, requires no external runtime, and runs on real hardware or any BIOS-based emulator (QEMU, Bochs, VirtualBox in legacy mode, etc).
 
@@ -264,13 +264,6 @@ mcopy -i btbx.img PONG.BIN ::PONG.BIN
 ```
 
 Because this is a raw floppy filesystem and not a partitioned disk image, always pass `-i` to point mtools at the image directly. If mtools complains about geometry, set `MTOOLS_SKIP_CHECK=1` before the command.
-
-## Version history
-| Version | Notes |
-|---|---|
-| 1.6.32 | BLOAD / SYS commands; SAY via SAM formant synth (WIP, not working yet); full file I/O; arrays; multi-dim; EDD disk; clean tree; interpreter stress-tested against a 1,000,000-limit prime sieve (correct result: 78,498 primes, largest 999,983); fixed bare-assignment parsing, numeric IF comparisons, NEXT-after-GOTO frame corruption, inline-IF false-branch handling, OPEN keyword-chaining whitespace bug, PRINT#/INPUT# dispatch-order conflict |
-| 1.5.x | SAY, BEEP, FAT12 r/w, file I/O channels |
-| 1.0.x | Initial bare-metal BASIC, single-stage loader |
 
 ## Licence
 MIT — see `LICENSE`.
