@@ -5,18 +5,19 @@
 <title>BTBX — Bare Tiny(?) BASIC eXecutor</title>
 <style>
   body { background:#000; color:#0f0; font-family:monospace; margin:0; padding:16px; }
-  #screen_container { white-space: pre; font-size: 14px; line-height: 14px; }
+  #screen_container { white-space: pre; font-size: 14px; line-height: 14px; outline: none; }
   a { color:#0ff; }
   #status { color:#ff0; }
 </style>
 </head>
 <body>
-<p>BTBX — Bare Tiny(?) BASIC eXecutor. Boots into BASIC. Click the screen, then type.<br>
+<p>BTBX — Bare Tiny(?) BASIC eXecutor. Requires JavaScript and XHR allowed for 3rd parties.<br>
+This demo is beta. Reviewers please use make && make run as specified in README.md. <br>
 Source: <a href="https://github.com/onyx-the-one/BTBX" target="_blank" rel="noopener">github.com/onyx-the-one/BTBX</a></p>
 
 <p id="status">Loading…</p>
 
-<div id="screen_container">
+<div id="screen_container" tabindex="0">
   <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
   <canvas style="display: none"></canvas>
 </div>
@@ -26,9 +27,10 @@ Source: <a href="https://github.com/onyx-the-one/BTBX" target="_blank" rel="noop
 "use strict";
 window.onload = function () {
   var statusEl = document.getElementById("status");
+  var screen = document.getElementById("screen_container");
 
   if (typeof V86 === "undefined") {
-    statusEl.textContent = "Failed to load the v86 emulator script (libv86.js). Check your internet connection and try reloading.";
+    statusEl.textContent = "Failed to load the v86 emulator script (libv86.js). Check JS/XHR blocking, adblockers, and try reloading.";
     return;
   }
 
@@ -36,7 +38,7 @@ window.onload = function () {
     wasm_path: "https://cdn.jsdelivr.net/npm/v86@0.5.44/build/v86.wasm",
     memory_size: 32 * 1024 * 1024,
     vga_memory_size: 2 * 1024 * 1024,
-    screen_container: document.getElementById("screen_container"),
+    screen_container: screen,
     bios: {
       url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin",
     },
@@ -49,8 +51,32 @@ window.onload = function () {
     autostart: true,
   });
 
+  function refocus() {
+    screen.focus();
+    var canvas = screen.querySelector("canvas");
+    var inner = screen.querySelector("div");
+    if (canvas) canvas.focus && canvas.focus();
+    if (inner) inner.focus && inner.focus();
+  }
+
+  screen.addEventListener("click", refocus);
+  window.addEventListener("click", refocus);
+
+  document.addEventListener("keydown", function (e) {
+    if (!screen.contains(document.activeElement) && document.activeElement !== screen) return;
+    if (!e.shiftKey) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!e.key || e.key.length !== 1) return;
+    if (/[A-Za-z0-9]/.test(e.key)) return;
+    if (typeof emulator.keyboard_send_text === "function") {
+      e.preventDefault();
+      emulator.keyboard_send_text(e.key);
+    }
+  }, true);
+
   emulator.add_listener("emulator-ready", function () {
     statusEl.textContent = "Running. (Click the screen above to interact)";
+    refocus();
   });
 
   emulator.add_listener("emulator-loaded", function () {
