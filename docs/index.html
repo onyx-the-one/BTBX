@@ -50,6 +50,7 @@ window.onload = function () {
     memory_size: 32 * 1024 * 1024,
     vga_memory_size: 2 * 1024 * 1024,
     screen_container: screen,
+    disable_keyboard: true,
     bios: {
       url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin",
     },
@@ -76,7 +77,11 @@ window.onload = function () {
     if (screen.contains(e.target) || e.target === screen) refocus();
   });
 
-  // Physical key scancodes (Set 1) to bypass browser layout/composition quirks
+  // Full physical key -> PS/2 Set 1 make-code map. We own ALL keyboard
+  // input now (disable_keyboard:true), so every keydown/keyup is sent
+  // as a raw scancode, exactly like a real PS/2 keyboard. This avoids
+  // any double-handling between the browser's own key-repeat/composition
+  // logic and v86's built-in keyboard listener.
   var code_scancodes = {
     'Digit1': 0x02, 'Digit2': 0x03, 'Digit3': 0x04, 'Digit4': 0x05,
     'Digit5': 0x06, 'Digit6': 0x07, 'Digit7': 0x08, 'Digit8': 0x09,
@@ -89,20 +94,36 @@ window.onload = function () {
     'KeyA': 0x1E, 'KeyS': 0x1F, 'KeyD': 0x20, 'KeyF': 0x21, 'KeyG': 0x22,
     'KeyH': 0x23, 'KeyJ': 0x24, 'KeyK': 0x25, 'KeyL': 0x26,
     'KeyZ': 0x2C, 'KeyX': 0x2D, 'KeyC': 0x2E, 'KeyV': 0x2F, 'KeyB': 0x30,
-    'KeyN': 0x31, 'KeyM': 0x32
+    'KeyN': 0x31, 'KeyM': 0x32,
+    'Space': 0x39, 'Enter': 0x1C, 'NumpadEnter': 0x1C, 'Backspace': 0x0E,
+    'Tab': 0x0F, 'Escape': 0x01,
+    'ShiftLeft': 0x2A, 'ShiftRight': 0x36,
+    'ControlLeft': 0x1D, 'AltLeft': 0x38, 'CapsLock': 0x3A,
+    'Numpad0': 0x52, 'Numpad1': 0x4F, 'Numpad2': 0x50, 'Numpad3': 0x51,
+    'Numpad4': 0x4B, 'Numpad5': 0x4C, 'Numpad6': 0x4D, 'Numpad7': 0x47,
+    'Numpad8': 0x48, 'Numpad9': 0x49, 'NumpadSubtract': 0x4A,
+    'NumpadAdd': 0x4E, 'NumpadDecimal': 0x53
   };
 
-  document.addEventListener("keydown", function (e) {
-    if (document.activeElement !== screen && !screen.contains(document.activeElement)) return;
+  function inScreen() {
+    return document.activeElement === screen || screen.contains(document.activeElement);
+  }
 
-    // If Shift is held down and it's a typing key, intercept completely
-    if (e.shiftKey && code_scancodes[e.code] && typeof emulator.keyboard_send_scancodes === "function") {
-      e.preventDefault();
-      e.stopPropagation();
-      var sc = code_scancodes[e.code];
-      // Left Shift Down (0x2A), Key Down, Key Up, Left Shift Up (0xAA)
-      emulator.keyboard_send_scancodes([0x2A, sc, sc | 0x80, 0xAA]);
-    }
+  document.addEventListener("keydown", function (e) {
+    if (!inScreen()) return;
+    var sc = code_scancodes[e.code];
+    if (sc === undefined) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    emulator.keyboard_send_scancodes([sc]);
+  }, true);
+
+  document.addEventListener("keyup", function (e) {
+    if (!inScreen()) return;
+    var sc = code_scancodes[e.code];
+    if (sc === undefined) return;
+    e.preventDefault();
+    emulator.keyboard_send_scancodes([sc | 0x80]);
   }, true);
 
   emulator.add_listener("emulator-ready", function () {
