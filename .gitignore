@@ -1,6 +1,5 @@
 .wakatime-project
 log.txt
-btbx.img
 kernel.bin
 kernel.elf
 kernel/*.o
