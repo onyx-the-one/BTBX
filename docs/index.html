@@ -5,7 +5,18 @@
 <title>BTBX — Bare Tiny(?) BASIC eXecutor</title>
 <style>
   body { background:#000; color:#0f0; font-family:monospace; margin:0; padding:16px; }
-  #screen_container { white-space: pre; font-size: 14px; line-height: 14px; outline: none; }
+  #screen_container {
+    white-space: pre;
+    font-size: 14px;
+    line-height: 14px;
+    outline: none;
+    display: inline-block;
+    border: 1px solid #0a0;
+    padding: 2px;
+    min-width: 640px;
+    min-height: 400px;
+    box-sizing: border-box;
+  }
   a { color:#0ff; }
   #status { color:#ff0; }
 </style>
@@ -55,22 +66,27 @@ window.onload = function () {
     screen.focus();
     var canvas = screen.querySelector("canvas");
     var inner = screen.querySelector("div");
-    if (canvas) canvas.focus && canvas.focus();
-    if (inner) inner.focus && inner.focus();
+    if (canvas && typeof canvas.focus === "function") canvas.focus();
+    else if (inner && typeof inner.focus === "function") inner.focus();
   }
 
+  screen.addEventListener("mousedown", function () { setTimeout(refocus, 0); });
   screen.addEventListener("click", refocus);
-  window.addEventListener("click", refocus);
+  window.addEventListener("click", function (e) {
+    if (screen.contains(e.target) || e.target === screen) refocus();
+  });
 
-  document.addEventListener("keydown", function (e) {
-    if (!screen.contains(document.activeElement) && document.activeElement !== screen) return;
-    if (!e.shiftKey) return;
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (!e.key || e.key.length !== 1) return;
-    if (/[A-Za-z0-9]/.test(e.key)) return;
-    if (typeof emulator.keyboard_send_text === "function") {
+  document.addEventListener("compositionstart", function (e) {
+    if (document.activeElement === screen || screen.contains(document.activeElement)) {
       e.preventDefault();
-      emulator.keyboard_send_text(e.key);
+    }
+  }, true);
+
+  document.addEventListener("beforeinput", function (e) {
+    if (document.activeElement === screen || screen.contains(document.activeElement)) {
+      if (e.inputType && e.inputType.indexOf("insertComposition") === 0) {
+        e.preventDefault();
+      }
     }
   }, true);
 
