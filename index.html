@@ -2,33 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>BTBX demo</title>
+<title>BTBX — Bare Tiny(?) BASIC eXecutor</title>
 <style>
   body { background:#000; color:#0f0; font-family:monospace; margin:0; padding:16px; }
   #screen_container { white-space: pre; font-size: 14px; line-height: 14px; }
   a { color:#0ff; }
+  #status { color:#ff0; }
 </style>
 </head>
 <body>
 <p>BTBX — Bare Tiny(?) BASIC eXecutor. This demo requires JavaScript and XHR.<br>
 Source: <a href="https://github.com/onyx-the-one/BTBX" target="_blank" rel="noopener">github.com/onyx-the-one/BTBX</a></p>
 
+<p id="status">Loading…</p>
+
 <div id="screen_container">
   <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
   <canvas style="display: none"></canvas>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/v86@0.5.44/build/libv86.js"></script>
 <script>
+"use strict";
+window.onload = function () {
+  var statusEl = document.getElementById("status");
+
+  if (typeof V86 === "undefined") {
+    statusEl.textContent = "Failed to load the v86 emulator script (libv86.js). Check your internet connection and try reloading.";
+    return;
+  }
+
   var emulator = new V86({
-    wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
+    wasm_path: "https://cdn.jsdelivr.net/npm/v86@0.5.44/build/v86.wasm",
     memory_size: 32 * 1024 * 1024,
     vga_memory_size: 2 * 1024 * 1024,
     screen_container: document.getElementById("screen_container"),
-    bios: { url: "https://cdn.jsdelivr.net/npm/v86@latest/bios/seabios.bin" },
-    fda: { url: "btbx.img" },
+    bios: {
+      url: "https://cdn.jsdelivr.net/npm/v86@0.5.44/bios/seabios.bin",
+    },
+    vga_bios: {
+      url: "https://cdn.jsdelivr.net/npm/v86@0.5.44/bios/vgabios.bin",
+    },
+    fda: {
+      url: "btbx.img",
+    },
     autostart: true,
   });
+
+  emulator.add_listener("emulator-ready", function () {
+    statusEl.textContent = "Running.";
+  });
+
+  emulator.add_listener("emulator-loaded", function () {
+    statusEl.textContent = "Booting…";
+  });
+};
 </script>
 </body>
 </html>
