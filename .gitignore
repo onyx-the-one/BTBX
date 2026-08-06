@@ -7,3 +7,7 @@ boot/*.bin
 handoff.txt
 kernel/.wakatime-project
 boot/.wakatime-project
+basic/.wakatime-project
+pong/.wakatime-project
+demo/.wakatime-project
+*/.wakatime-project

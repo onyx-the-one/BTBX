@@ -22,7 +22,7 @@ if(kw("SYS")){Val addr=expr();if(err)return;typedef void(*fnt)(void);fnt fn=(fnt
 if(kw("TIME")){RtcTime rt;char db[16],tb[16];if(rtc_read(&rt)<0){berr("RTC");return;}rtc_format_date(&rt,db,(int)sizeof(db));rtc_format_time(&rt,tb,(int)sizeof(tb));term_puts(db);term_putchar(' ');term_puts(tb);term_putchar('\n');return;}
 
 /* HELP */
-if(kw("HELP")){term_set_color(VGA_CYAN,VGA_BLACK);term_puts("BTBX BASIC command reference\n");term_set_color(VGA_LIGHT_GREY,VGA_BLACK);
+if(kw("HELP")){term_set_color(VGA_CYAN,VGA_BLACK);term_puts("BOREALIS BASIC command reference\n");term_set_color(VGA_LIGHT_GREY,VGA_BLACK);
 term_puts(" PRINT/? expr,expr,...  INPUT prompt$, var  LET var=expr\n");
 term_puts(" REM comment  IF expr THEN .. [ELSE] [ENDIF]  GOTO n\n");
 term_puts(" FOR v=n TO n [STEP n]  NEXT v  WHILE expr  WEND\n");

@@ -62,13 +62,12 @@ static void draw_border(int top,int bottom,uint8_t attr){
 }
 
 static void draw_banner(void){
-    const char *title = "B T B X   P O N G";
+    const char *title = "B O R E A L I S    P O N G";
     int x = (COLS - 18) / 2;
     draw_hline(0, ' ', 0x1F);
     puts_at(x, 0, title, 0x1F);
 }
 
-/* ── PIT-based millisecond delay (hardware timer, CPU-speed independent) ── */
 static void delay_ms(uint32_t ms){
     while(ms--){
         uint32_t ticks = 1193u;

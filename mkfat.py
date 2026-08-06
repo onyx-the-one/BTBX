@@ -21,7 +21,7 @@ FAT2_LBA = FAT1_LBA + FAT_SECS
 ROOT_LBA = FAT2_LBA + FAT_SECS
 DATA_LBA = ROOT_LBA + ROOT_SECS
 
-BOOTMETA = "boot/bootmeta.inc"
+BOOTMETA = "coil/bootmeta.inc"
 
 
 def ceil_div(a, b):
@@ -42,7 +42,7 @@ def emit_bootmeta(kern, quiet=False):
         f"KERNEL_LBA equ {kern_lba}\n"
         f"KERNEL_SECS equ {kern_secs}\n"
     )
-    os.makedirs("boot", exist_ok=True)
+    os.makedirs("coil", exist_ok=True)
     old = None
     if os.path.exists(BOOTMETA):
         with open(BOOTMETA, "r", encoding="ascii") as f:
@@ -77,29 +77,29 @@ def fat12_set(fat, clus, val):
 
 
 def build_image():
-    with open("boot/stage1.bin", "rb") as f:
+    with open("coil/stage1.bin", "rb") as f:
         s1 = bytearray(f.read())
-    with open("boot/stage2.bin", "rb") as f:
+    with open("coil/stage2.bin", "rb") as f:
         s2 = f.read()
-    with open("kernel.bin", "rb") as f:
+    with open("helix.bin", "rb") as f:
         kern = f.read()
 
     if len(s1) != SECTOR_SZ:
-        raise SystemExit("boot/stage1.bin must be exactly 512 bytes")
+        raise SystemExit("coil/stage1.bin must be exactly 512 bytes")
     if len(s2) > 4 * SECTOR_SZ:
-        raise SystemExit("boot/stage2.bin must fit in 4 sectors")
+        raise SystemExit("coil/stage2.bin must fit in 4 sectors")
     if not kern:
-        raise SystemExit("kernel.bin is empty")
+        raise SystemExit("helix.bin is empty")
 
     emit_bootmeta(kern, quiet=True)
 
     kern_lba, kern_secs, kern_clus = kernel_layout(kern)
     if kern_lba + kern_secs > SECTORS:
-        raise SystemExit("kernel does not fit in image")
+        raise SystemExit("helix does not fit in image")
 
     img = bytearray(SECTORS * SECTOR_SZ)
 
-    s1[3:11] = b"BTBX1.1 "
+    s1[3:11] = b"BOREALIS"
     bpb = struct.pack(
         "<HBHBHHBHHHII",
         SECTOR_SZ,
@@ -132,7 +132,7 @@ def build_image():
 
     root = bytearray(ROOT_SECS * SECTOR_SZ)
     dirent = bytearray(32)
-    dirent[0:11] = b"KERNEL  BIN"
+    dirent[0:11] = b"HELIX   BIN"
     dirent[11] = 0x20
     dirent[26:28] = struct.pack("<H", 2)
     dirent[28:32] = struct.pack("<I", len(kern))
@@ -141,11 +141,11 @@ def build_image():
 
     write_sectors(img, DATA_LBA, kern)
 
-    with open("btbx.img", "wb") as f:
+    with open("borealis.img", "wb") as f:
         f.write(img)
 
     print(
-        f"Built btbx.img ({len(img)//1024} KB, kernel={len(kern)} bytes, "
+        f"Built borealis.img ({len(img)//1024} KB, kernel={len(kern)} bytes, "
         f"secs={kern_secs}, lba={kern_lba})"
     )
 
@@ -154,7 +154,7 @@ def main():
     if len(sys.argv) > 2:
         raise SystemExit("usage: mkfat.py [--bootmeta]")
 
-    with open("kernel.bin", "rb") as f:
+    with open("helix.bin", "rb") as f:
         kern = f.read()
 
     if len(sys.argv) == 2:

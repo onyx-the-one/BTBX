@@ -1,71 +1,76 @@
-# BTBX Makefile — ver. 1.6.32
+# BOREALIS Makefile
 
 CC     := i686-elf-gcc
 CFLAGS := -m32 -ffreestanding -fno-pic -std=gnu99 \
            -Wall -Wextra -Wno-unused-parameter \
            -O2 -mfpmath=387 -fno-stack-protector \
-           -I src/kernel -I src/kernel/fs -I src/kernel/sound \
-           -I src/kernel/rtc -I src/kernel/gfx
+           -I src/helix -I src/helix/fs -I src/helix/sound \
+           -I src/helix/rtc -I src/helix/gfx
 NASM   := nasm
 PYTHON := python3
 
-CSRCS := src/kernel/kernel.c \
-         src/kernel/basic.c \
-         src/kernel/fs/fat12.c \
-         src/kernel/sound/sound.c \
-         src/kernel/rtc/rtc.c \
-         src/kernel/gfx/gfx.c
+CSRCS := src/helix/helix.c \
+         src/helix/basic.c \
+         src/helix/fs/fat12.c \
+         src/helix/sound/sound.c \
+         src/helix/rtc/rtc.c \
+         src/helix/gfx/gfx.c
 COBJS := $(CSRCS:.c=.o)
-ASMS  := src/kernel/entry.asm
-AOBJS := src/kernel/entry.o
+ASMS  := src/helix/entry.asm
+AOBJS := src/helix/entry.o
 
-all: btbx.img
+all: borealis.img
 
 # ── Assemble 16-bit blobs ──────────────────────────────────────────────────
-boot/stage1.bin: boot/stage1.asm
+coil/stage1.bin: coil/stage1.asm
 	$(NASM) -f bin -o $@ $<
 
-boot/bootmeta.inc: kernel.bin
+coil/bootmeta.inc: helix.bin
 	$(PYTHON) mkfat.py --bootmeta
 
-boot/stage2.bin: boot/stage2.asm boot/bootmeta.inc
+coil/stage2.bin: coil/stage2.asm coil/bootmeta.inc
 	$(NASM) -f bin -o $@ $<
 
-src/kernel/fs/thunk16.bin: src/kernel/fs/thunk16.asm
+src/helix/fs/thunk16.bin: src/helix/fs/thunk16.asm
 	$(NASM) -f bin -o $@ $<
 
-# ── Compile kernel ─────────────────────────────────────────────────────────
+# ── Compile helix ─────────────────────────────────────────────────────────
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-src/kernel/entry.o: src/kernel/entry.asm src/kernel/fs/thunk16.bin
+src/helix/entry.o: src/helix/entry.asm src/helix/fs/thunk16.bin
 	$(NASM) -f elf32 -o $@ $<
 
-kernel.bin: $(AOBJS) $(COBJS) linker.ld
+helix.bin: $(AOBJS) $(COBJS) linker.ld
 	$(CC) -m32 -ffreestanding -nostdlib -T linker.ld \
-	      -o kernel.elf $(AOBJS) $(COBJS) -lgcc
-	objcopy -O binary kernel.elf $@
+	      -o helix.elf $(AOBJS) $(COBJS) -lgcc
+	objcopy -O binary helix.elf $@
 
 # ── Disk image ──────────────────────────────────────────────────────────────
-btbx.img: boot/stage1.bin boot/stage2.bin kernel.bin
+borealis.img: coil/stage1.bin coil/stage2.bin helix.bin
 	$(PYTHON) mkfat.py
 
 # ── Run in QEMU ─────────────────────────────────────────────────────────────
-run: btbx.img
-	qemu-system-i386 -drive file=btbx.img,format=raw,if=floppy \
+run: borealis.img
+	qemu-system-i386 -drive file=borealis.img,format=raw,if=floppy \
 	                 -boot a -m 4 -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
 
-run-vga: btbx.img
-	qemu-system-i386 -drive file=btbx.img,format=raw,if=floppy \
+run-vga: borealis.img
+	qemu-system-i386 -drive file=borealis.img,format=raw,if=floppy \
 	                 -boot a -m 4 -audiodev pa,id=snd0 -machine pcspk-audiodev=snd0
 
 clean:
 	rm -f $(COBJS) $(AOBJS) \
-	boot/stage1.bin boot/stage2.bin boot/bootmeta.inc \
-	src/kernel/fs/thunk16.bin \
-	kernel.elf kernel.bin btbx.img
+	coil/stage1.bin coil/stage2.bin coil/bootmeta.inc \
+	src/helix/fs/thunk16.bin \
+	helix.elf helix.bin borealis.img
+
+pack:
+	mcopy -i borealis.img pong/PONG.BIN ::PONG.BIN
+	mcopy -i borealis.img basic/primes.bas ::PRIMES.BAS
+	mcopy -i borealis.img basic/scrtest.bas ::SCRTEST.BAS
 
 box:
-	cd .. && tar -czvf BTBX-vers.tar.gz BTBX
+	cd .. && tar -czvf BOREALIS-vers.tar.gz BOREALIS/*
 
 .PHONY: all run run-vga clean

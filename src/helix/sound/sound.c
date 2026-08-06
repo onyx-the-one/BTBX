@@ -1,4 +1,4 @@
-/* sound.c – PC speaker audio for BTBX
+/* sound.c – PC speaker audio for BOREALIS
  * BEEP : PIT channel 2, mode 3 square wave.
  * SAY  : Formant/phoneme synth — SAM port (MIT licence, s-macke/SAM).
  * PWM  : 22 050 Hz, 1-bit, PIT ch0 polling.

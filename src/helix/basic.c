@@ -383,7 +383,7 @@ static void edit_setmsg(char *dst,const char *src){bstrcpy(dst,src,80);}
 static void edit_draw(int cur,int top,const char *target,const char *msg){
     term_clear();
     term_set_color(VGA_CYAN,VGA_BLACK);
-    term_puts("BTBX EDIT");
+    term_puts("BOREALIS EDIT");
     if(target&&*target){term_puts(" ");term_puts(target);}    
     term_putchar('\n');
 
