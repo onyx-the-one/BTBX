@@ -11,7 +11,7 @@ The system has three named layers:
 - **helix** — the kernel. Hardware bring-up, drivers, filesystem, and the real-mode BIOS thunk that bridges firmware services and protected-mode execution.
 - **BOREALIS** — the system as a whole; the user-facing name.
 
-Formerly known as BTBX (Bare Tiny(?) BASIC eXecutor).
+Formerly known as BTBX (Bare Tiny(?) BASIC eXecutor). Rename is still not complete, bear with me.
 
 ## Table of contents
 - [Features](#features)
